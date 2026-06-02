@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station de Recharge Solaire Intelligente — Monitoring</title>
+<style>
+  :root{--bg:#0a0e17;--bg2:#111827;--line:#1e2d44;--txt:#e6edf5;--muted:#7d8aa0;
+    --accent:#ffb000;--accent2:#00d4ff;--on:#00e08a;--off:#ff4d6d;--ok:#00e08a;--err:#ff4d6d}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 70% -10%,#16233b 0%,var(--bg) 55%);
+    color:var(--txt);font-family:'Segoe UI',system-ui,Arial,sans-serif;min-height:100vh;padding:24px 16px 48px}
+  .wrap{max-width:960px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .title h1{font-size:1.45rem;font-weight:700}
+  .title p{color:var(--muted);font-size:.85rem;margin-top:2px}
+  .status{display:flex;align-items:center;gap:8px;font-size:.85rem;background:var(--bg2);
+    border:1px solid var(--line);padding:8px 14px;border-radius:30px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--off);transition:.3s}
+  .dot.live{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .banner{display:none;background:rgba(255,77,109,.12);border:1px solid var(--err);color:#ffd7de;
+    border-radius:12px;padding:14px 18px;margin-top:16px;font-size:.9rem;line-height:1.5}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:22px}
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:20px 22px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .card .label{color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.5px}
+  .card .val{font-size:2.3rem;font-weight:700;margin-top:10px;line-height:1}
+  .card .val span{font-size:1rem;font-weight:500;color:var(--muted);margin-left:4px}
+  .section-title{margin:30px 0 0;font-size:1.05rem;font-weight:600;color:var(--accent)}
+  .relays{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:14px}
+  .relay{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:22px;text-align:center}
+  .relay h3{font-size:1rem;font-weight:600}.relay .sub{color:var(--muted);font-size:.8rem;margin:4px 0 16px}
+  .pill{display:inline-block;padding:5px 16px;border-radius:30px;font-size:.85rem;font-weight:700;margin-bottom:16px}
+  .s-on{background:rgba(0,224,138,.15);color:var(--on);border:1px solid var(--on)}
+  .s-off{background:rgba(255,77,109,.12);color:var(--off);border:1px solid var(--off)}
+  .toggle{display:flex;gap:10px;justify-content:center}
+  .toggle button{flex:1;max-width:120px;padding:12px;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s;opacity:.55}
+  .toggle button:hover{opacity:1;transform:translateY(-1px)}
+  .b-on{background:var(--on);color:#04261a}.b-off{background:var(--off);color:#350912}
+  .toggle button.active{opacity:1;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+  .log{margin-top:26px;background:#070a12;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    font-family:Consolas,monospace;font-size:.78rem;color:#9fb0c8;max-height:180px;overflow:auto;white-space:pre-wrap}
+  .log .e{color:#ff8a9b}.log .o{color:#7fe7b8}
+  footer{margin-top:18px;color:var(--muted);font-size:.78rem;text-align:center;line-height:1.6}
+  .pulse{animation:p 1.2s infinite}@keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">
+      <h1>☀️ Station de Recharge Solaire Intelligente</h1>
+      <p>Monitoring &amp; contrôle à distance — UATM GASA-Formation</p>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusTxt">Connexion…</span></div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="grid">
+    <div class="card"><div class="label">⚡ Tension batterie</div><div class="val"><span id="ubat">--</span><span>V</span></div></div>
+    <div class="card"><div class="label">🔌 Courant</div><div class="val"><span id="ibat">--</span><span>A</span></div></div>
+    <div class="card"><div class="label">💡 Puissance</div><div class="val"><span id="pbat">--</span><span>W</span></div></div>
+    <div class="card"><div class="label">🔋 Temp. batterie</div><div class="val"><span id="tbat">--</span><span>°C</span></div></div>
+    <div class="card"><div class="label">🌞 Temp. panneau</div><div class="val"><span id="tpv">--</span><span>°C</span></div></div>
+  </div>
+
+  <h2 class="section-title">Commande des relais</h2>
+  <div class="relays">
+    <div class="relay"><h3>Relais 1</h3><div class="sub">Sortie DC 5V</div>
+      <div class="pill s-off" id="pill1">OFF</div>
+      <div class="toggle"><button class="b-on" id="rl1on" onclick="cmd('rl1','ON')">ON</button>
+        <button class="b-off" id="rl1off" onclick="cmd('rl1','OFF')">OFF</button></div></div>
+    <div class="relay"><h3>Relais 2</h3><div class="sub">Sortie AC 220V</div>
+      <div class="pill s-off" id="pill2">OFF</div>
+      <div class="toggle"><button class="b-on" id="rl2on" onclick="cmd('rl2','ON')">ON</button>
+        <button class="b-off" id="rl2off" onclick="cmd('rl2','OFF')">OFF</button></div></div>
+  </div>
+
+  <div class="log" id="log"></div>
+  <footer>Données via broker MQTT HiveMQ Cloud (WebSocket sécurisé).<br>
+    Dernière mise à jour : <span id="lastUpd">jamais</span></footer>
+</div>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+  /* ############################################################ */
+  /* #####  >>> A REMPLIR : MEMES VALEURS QUE L'ESP32 <<<   ###### */
+  /* ############################################################ */
+  const HOST = "8f2aabd7f80b4092b6cc2e539047dc16.s1.eu.hivemq.cloud";  // MEME adresse de cluster
+  const USER = "ESPSolar32-";               // MEME identifiant
+  const PASS = "Solar123#";                   // MEME mot de passe
+  /* ############################################################ */
+
+  const PORT = 8884;
+  const URL  = `wss://${HOST}:${PORT}/mqtt`;
+
+  const $ = id => document.getElementById(id);
+
+  function log(msg, cls){
+    const el = $("log");
+    const t = new Date().toLocaleTimeString("fr-FR");
+    el.innerHTML += `<span class="${cls||''}">[${t}] ${msg}</span>\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+  function setStatus(ok, txt){
+    $("dot").classList.toggle("live", ok);
+    $("statusTxt").textContent = txt;
+    $("statusTxt").classList.toggle("pulse", !ok);
+  }
+  function showBanner(html){ const b=$("banner"); b.innerHTML=html; b.style.display="block"; }
+
+  function setRelay(n, on){
+    $("pill"+n).textContent = on ? "ON" : "OFF";
+    $("pill"+n).className = "pill " + (on ? "s-on" : "s-off");
+    $("rl"+n+"on").classList.toggle("active", on);
+    $("rl"+n+"off").classList.toggle("active", !on);
+  }
+  function estActif(v){
+    v = (v||"").toString().trim().toUpperCase();
+    return v==="ON" || v==="1" || v==="TRUE" || v.indexOf("ACTIV")===0;
+  }
+
+  let client = null;
+
+  if (HOST.indexOf("xxxxxxxx")>=0 || USER==="TON_IDENTIFIANT" || PASS==="TON_MDP_MQTT"){
+    setStatus(false, "Config non remplie");
+    showBanner("⚠️ Les valeurs <b>HOST</b>, <b>USER</b> et <b>PASS</b> n'ont pas été remplies dans le fichier. " +
+      "Ouvre <code>dashboard_solaire.html</code> dans un éditeur, mets tes vraies valeurs HiveMQ (les mêmes que l'ESP32), enregistre, puis recharge la page.");
+    log("Config non remplie — connexion non tentée.", "e");
+  } else {
+    connect();
+  }
+
+  function connect(){
+    setStatus(false, "Connexion au broker…");
+    log("Connexion à " + URL + " (user: " + USER + ")");
+    client = mqtt.connect(URL, {
+      username:USER, password:PASS,
+      clientId:"web_" + Math.random().toString(16).slice(2,8),
+      reconnectPeriod:4000, connectTimeout:8000, clean:true
+    });
+
+    client.on("connect", () => {
+      setStatus(true, "En ligne");
+      log("Connecté au broker OK", "o");
+      client.subscribe("solaire/#");
+      client.subscribe("etat/#");
+    });
+
+    client.on("message", (topic, payload) => {
+      const v = payload.toString();
+      $("lastUpd").textContent = new Date().toLocaleTimeString("fr-FR");
+      log(topic + " = " + v);
+      if      (topic === "solaire/tension")   $("ubat").textContent = v;
+      else if (topic === "solaire/courant")   $("ibat").textContent = v;
+      else if (topic === "solaire/puissance") $("pbat").textContent = v;
+      else if (topic === "solaire/temp_bat")  $("tbat").textContent = v;
+      else if (topic === "solaire/temp_pv")   $("tpv").textContent  = v;
+      else if (topic.indexOf("etat/")===0 && topic.indexOf("rl1")>=0) setRelay(1, estActif(v));
+      else if (topic.indexOf("etat/")===0 && topic.indexOf("rl2")>=0) setRelay(2, estActif(v));
+    });
+
+    client.on("reconnect", () => { setStatus(false, "Reconnexion…"); });
+    client.on("error", (e) => {
+      const m = (e && e.message) ? e.message : e;
+      setStatus(false, "Erreur");
+      log("ERREUR : " + m, "e");
+      if (("" + m).toLowerCase().indexOf("not authorized")>=0 ||
+          ("" + m).toLowerCase().indexOf("auth")>=0)
+        showBanner("Identifiants refusés par le broker. Vérifie que USER/PASS correspondent " +
+          "exactement à un identifiant actif dans HiveMQ > Access Management.");
+    });
+    client.on("close", () => { setStatus(false, "Hors ligne"); });
+  }
+
+  function cmd(relay, state){
+    if(!client || !client.connected){ alert("Pas de connexion au broker."); return; }
+    const topic = relay === "rl1" ? "commandes/rl1" : "commandes/rl2";
+    client.publish(topic, state);
+    log("Commande envoyée : " + topic + " = " + state, "o");
+  }
+</script>
+</body>
+</html>
